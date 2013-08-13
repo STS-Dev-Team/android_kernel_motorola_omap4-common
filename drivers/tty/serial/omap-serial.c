@@ -1736,10 +1736,10 @@ static int serial_omap_probe(struct platform_device *pdev)
 	serial_omap_add_console_port(up);
 
 	ret = request_irq(up->port.irq, serial_omap_irq, up->port.irqflags,
-	      up->name, up);
-	  if (ret)
-	    goto do_iounmap;
-	  disable_irq(up->port.irq);
+				up->name, up);
+	if (ret)
+		goto do_iounmap;
+	disable_irq(up->port.irq);
 
 	ret = uart_add_one_port(&serial_omap_reg, &up->port);
 	if (ret != 0)
@@ -1761,8 +1761,8 @@ do_free:
 	kfree(up);
 do_release_region:
 	release_mem_region(mem->start, (mem->end - mem->start) + 1);
-	  dev_err(&pdev->dev, "[UART%d]: failure [%s]: %d\n",
-	        pdev->id, __func__, ret);
+	dev_err(&pdev->dev, "[UART%d]: failure [%s]: %d\n",
+				pdev->id, __func__, ret);
 	return ret;
 }
 
