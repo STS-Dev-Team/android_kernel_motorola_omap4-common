@@ -138,6 +138,10 @@ struct ehci_hcd {			/* one per controller */
 	unsigned		use_dummy_qh:1;	/* AMD Frame List table quirk*/
 	unsigned		has_synopsys_hc_bug:1; /* Synopsys HC */
 	unsigned		no_companion_port_handoff:1; /* Omap */
+
+	/* Transceiver QUIRKS */
+	unsigned		has_smsc_ulpi_bug:1; /* Smsc */
+	unsigned		resume_error_flag:1; /* Smsc */
 	unsigned		frame_index_bug:1; /* MosChip (AKA NetMos) */
 
 	/* required for usb32 quirk */

@@ -708,6 +708,13 @@ static struct regulator_init_data sdp4430_clk32kg = {
 	},
 };
 
+static struct regulator_init_data sdp4430_clk32kaudio = {
+	.constraints = {
+		.valid_ops_mask		= REGULATOR_CHANGE_STATUS,
+		.always_on		= true,
+	},
+};
+
 static void omap4_audio_conf(void)
 {
 	/* twl6040 naudint */
@@ -837,7 +844,7 @@ static struct twl4030_platform_data sdp4430_twldata = {
 	.irq_base	= TWL6030_IRQ_BASE,
 	.irq_end	= TWL6030_IRQ_END,
 
-	/* Regulators */
+	/* TWL6030 regulators at OMAP443X/446X based SOMs */
 	.vmmc		= &sdp4430_vmmc,
 	.vpp		= &sdp4430_vpp,
 	.vusim		= &sdp4430_vusim,
@@ -848,10 +855,25 @@ static struct twl4030_platform_data sdp4430_twldata = {
 	.vaux1		= &sdp4430_vaux1,
 	.vaux2		= &sdp4430_vaux2,
 	.vaux3		= &sdp4430_vaux3,
+
+	/* TWL6032 regulators at OMAP447X based SOMs */
+	.ldo1		= &sdp4430_vpp,
+	.ldo2		= &sdp4430_vaux1,
+	.ldo3		= &sdp4430_vaux3,
+	.ldo4		= &sdp4430_vaux2,
+	.ldo5		= &sdp4430_vmmc,
+	.ldo6		= &sdp4430_vcxio,
+	.ldo7		= &sdp4430_vusim,
+	.ldoln		= &sdp4430_vdac,
+	.ldousb		= &sdp4430_vusb,
+
+	/* TWL6030/6032 common resources */
 	.clk32kg	= &sdp4430_clk32kg,
-	.usb		= &omap4_usbphy_data,
-	.bci		= &sdp4430_bci_data,
+	.clk32kaudio	= &sdp4430_clk32kaudio,
+
 	/* children */
+	.bci		= &sdp4430_bci_data,
+	.usb		= &omap4_usbphy_data,
 	.codec		= &twl6040_codec,
 	.madc		= &twl6030_gpadc,
 
@@ -940,7 +962,7 @@ static int __init omap4_i2c_init(void)
 	regulator_has_full_constraints();
 
 	/*
-	 * Drive MSECURE high for TWL6030 write access.
+	 * Drive MSECURE high for TWL6030/6032 write access.
 	 */
 	omap_mux_init_signal("fref_clk0_out.gpio_wk6", OMAP_PIN_OUTPUT);
 	gpio_request(6, "msecure");
@@ -1169,8 +1191,8 @@ static struct omap_board_mux board_mux[] __initdata = {
 #endif
 
 /*
- * LPDDR2 Configeration Data:
- * The memory organisation is as below :
+ * LPDDR2 Configuration Data for 4430/4460 SOMs:
+ * The memory organization is as below :
  *	EMIF1 - CS0 -	2 Gb
  *		CS1 -	2 Gb
  *	EMIF2 - CS0 -	2 Gb
@@ -1183,6 +1205,20 @@ static struct omap_board_mux board_mux[] __initdata = {
 static __initdata struct emif_device_details emif_devices = {
 	.cs0_device = &lpddr2_elpida_2G_S4_dev,
 	.cs1_device = &lpddr2_elpida_2G_S4_dev
+};
+
+/*
+ * LPDDR2 Configuration Data for 4470 SOMs:
+ * The memory organization is as below :
+ *	EMIF1 - CS0 -	4 Gb
+ *	EMIF2 - CS0 -	4 Gb
+ *	--------------------
+ *	TOTAL -		8 Gb
+ *
+ * Same devices installed on EMIF1 and EMIF2
+ */
+static __initdata struct emif_device_details emif_devices_4470 = {
+	.cs0_device = &lpddr2_elpida_4G_S4_dev,
 };
 
 static struct omap_device_pad blaze_uart1_pads[] __initdata = {
@@ -1389,7 +1425,11 @@ static void __init omap_4430sdp_init(void)
 		package = OMAP_PACKAGE_CBL;
 	omap4_mux_init(board_mux, NULL, package);
 
-	omap_emif_setup_device_details(&emif_devices, &emif_devices);
+	if (cpu_is_omap447x())
+		omap_emif_setup_device_details(&emif_devices_4470,
+					       &emif_devices_4470);
+	else
+		omap_emif_setup_device_details(&emif_devices, &emif_devices);
 
 	omap_board_config = sdp4430_config;
 	omap_board_config_size = ARRAY_SIZE(sdp4430_config);

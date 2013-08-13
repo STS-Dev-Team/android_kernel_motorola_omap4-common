@@ -561,6 +561,13 @@ static struct regulator_init_data tablet_clk32kg = {
 	},
 };
 
+static struct regulator_init_data tablet_clk32kaudio = {
+	.constraints = {
+		.valid_ops_mask		= REGULATOR_CHANGE_STATUS,
+		.always_on		= true,
+	},
+};
+
 static void omap4_audio_conf(void)
 {
 	/* twl6040 naudint */
@@ -694,7 +701,7 @@ static struct twl4030_platform_data tablet_twldata = {
 	.irq_base	= TWL6030_IRQ_BASE,
 	.irq_end	= TWL6030_IRQ_END,
 
-	/* Regulators */
+	/* TWL6030 regulators at OMAP443X/4460 based SOMs */
 	.vmmc		= &tablet_vmmc,
 	.vpp		= &tablet_vpp,
 	.vusim		= &tablet_vusim,
@@ -705,16 +712,30 @@ static struct twl4030_platform_data tablet_twldata = {
 	.vaux1		= &tablet_vaux1,
 	.vaux2		= &tablet_vaux2,
 	.vaux3		= &tablet_vaux3,
-	.clk32kg	= &tablet_clk32kg,
-	.usb		= &omap4_usbphy_data,
+
+	/* TWL6032 regulators at OMAP447X based SOMs */
+	.ldo1		= &tablet_vpp,
+	.ldo2		= &tablet_vaux1,
+	.ldo3		= &tablet_vaux3,
+	.ldo4		= &tablet_vaux2,
+	.ldo5		= &tablet_vmmc,
+	.ldo6		= &tablet_vcxio,
+	.ldo7		= &tablet_vusim,
+	.ldoln		= &tablet_vdac,
+	.ldousb		= &tablet_vusb,
 
 	/* SMPS */
 	.vdd1		= &tablet_vcore1,
 	.vdd2		= &tablet_vcore2,
 
+	/* TWL6030/6032 common resources */
+	.clk32kg	= &tablet_clk32kg,
+	.clk32kaudio	= &tablet_clk32kaudio,
+
 	/* children */
-	.codec		= &twl6040_codec,
 	.bci		= &sdp4430_bci_data,
+	.usb		= &omap4_usbphy_data,
+	.codec		= &twl6040_codec,
 	.madc		= &twl6030_gpadc,
 };
 
@@ -732,10 +753,6 @@ static struct i2c_board_info __initdata sdp4430_i2c_boardinfo[] = {
 		I2C_BOARD_INFO("tps6130x", 0x33),
 		.platform_data = &twl6040_vddhf,
 	},
-};
-
-static struct i2c_board_info __initdata tablet_i2c_3_boardinfo[] = {
-
 };
 
 static void __init tablet_pmic_mux_init(void)
@@ -793,8 +810,7 @@ static int __init omap4_i2c_init(void)
 	i2c_register_board_info(1, sdp4430_i2c_boardinfo,
 				ARRAY_SIZE(sdp4430_i2c_boardinfo));
 	omap_register_i2c_bus(2, 400, NULL, 0);
-	omap_register_i2c_bus(3, 400, tablet_i2c_3_boardinfo,
-				ARRAY_SIZE(tablet_i2c_3_boardinfo));
+	omap_register_i2c_bus(3, 400, NULL, 0);
 	omap_register_i2c_bus(4, 400, NULL, 0);
 
 	omap2_i2c_pullup(3, I2C_PULLUP_STD_860_OM_FAST_500_OM);
@@ -806,7 +822,7 @@ static int __init omap4_i2c_init(void)
 	regulator_has_full_constraints();
 
 	/*
-	 * Drive MSECURE high for TWL6030 write access.
+	 * Drive MSECURE high for TWL6030/6032 write access.
 	 */
 	omap_mux_init_signal("fref_clk0_out.gpio_wk6", OMAP_PIN_OUTPUT);
 	gpio_request(6, "msecure");
@@ -823,11 +839,9 @@ module_param(enable_suspend_off, bool, S_IRUSR | S_IRGRP | S_IROTH);
 static struct omap_board_mux board_mux[] __initdata = {
 	OMAP4_MUX(USBB2_ULPITLL_CLK, OMAP_MUX_MODE3 | OMAP_PIN_OUTPUT
                         | OMAP_PULL_ENA),
-	{ .reg_offset = OMAP_MUX_TERMINATOR },
 
 	/* IO optimization pdpu and offmode settings to reduce leakage */
 	OMAP4_MUX(GPMC_A17, OMAP_MUX_MODE3 | OMAP_INPUT_EN),
-	OMAP4_MUX(GPMC_NBE1, OMAP_MUX_MODE3 | OMAP_PIN_OUTPUT),
 	OMAP4_MUX(GPMC_NCS4, OMAP_MUX_MODE3 | OMAP_INPUT_EN),
 	OMAP4_MUX(GPMC_NCS5, OMAP_MUX_MODE3 | OMAP_PULL_ENA | OMAP_PULL_UP
 					| OMAP_OFF_EN | OMAP_OFF_PULL_EN),
@@ -844,6 +858,7 @@ static struct omap_board_mux board_mux[] __initdata = {
 					| OMAP_OFF_PULL_EN),
         OMAP4_MUX(GPMC_NCS1, OMAP_MUX_MODE3 | OMAP_INPUT_EN | OMAP_WAKEUP_EN),
 	OMAP4_MUX(GPMC_A24, OMAP_MUX_MODE3 | OMAP_INPUT_EN | OMAP_WAKEUP_EN),
+	{ .reg_offset = OMAP_MUX_TERMINATOR },
 };
 
 #else
@@ -852,8 +867,8 @@ static struct omap_board_mux board_mux[] __initdata = {
 #endif
 
 /*
- * LPDDR2 Configeration Data:
- * The memory organisation is as below :
+ * LPDDR2 Configuration Data for 4430/4460 SOMs:
+ * The memory organization is as below :
  *	EMIF1 - CS0 -	2 Gb
  *		CS1 -	2 Gb
  *	EMIF2 - CS0 -	2 Gb
@@ -866,6 +881,20 @@ static struct omap_board_mux board_mux[] __initdata = {
 static __initdata struct emif_device_details emif_devices = {
 	.cs0_device = &lpddr2_elpida_2G_S4_dev,
 	.cs1_device = &lpddr2_elpida_2G_S4_dev
+};
+
+/*
+ * LPDDR2 Configuration Data for 4470 SOMs:
+ * The memory organization is as below :
+ *	EMIF1 - CS0 -	4 Gb
+ *	EMIF2 - CS0 -	4 Gb
+ *	--------------------
+ *	TOTAL -		8 Gb
+ *
+ * Same devices installed on EMIF1 and EMIF2
+ */
+static __initdata struct emif_device_details emif_devices_4470 = {
+	.cs0_device = &lpddr2_elpida_4G_S4_dev,
 };
 
 static struct omap_device_pad tablet_uart1_pads[] __initdata = {
@@ -1072,8 +1101,8 @@ static void __init tablet_camera_mux_init(void)
 {
 	u32 r = 0;
 
-	/* Enable CSI22 pads for 4460 only*/
-	if (cpu_is_omap446x() &&
+	/* Enable CSI22 pads for 4460 and 4470*/
+	if ((cpu_is_omap446x() || cpu_is_omap447x()) &&
 		(omap_get_board_version() >= OMAP4_TABLET_2_0)) {
 		r = omap4_ctrl_pad_readl(OMAP4_CTRL_MODULE_PAD_CORE_CONTROL_CAMERA_RX);
 		r |= (0x7 << OMAP4_CAMERARX_CSI22_LANEENABLE_SHIFT);
@@ -1106,7 +1135,11 @@ static void __init omap_tablet_init(void)
 		package = OMAP_PACKAGE_CBL;
 	omap4_mux_init(board_mux, NULL, package);
 
-	omap_emif_setup_device_details(&emif_devices, &emif_devices);
+	if (cpu_is_omap447x())
+		omap_emif_setup_device_details(&emif_devices_4470,
+					       &emif_devices_4470);
+	else
+		omap_emif_setup_device_details(&emif_devices, &emif_devices);
 
 	omap_board_config = tablet_config;
 	omap_board_config_size = ARRAY_SIZE(tablet_config);
