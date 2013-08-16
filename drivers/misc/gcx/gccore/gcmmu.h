@@ -137,9 +137,6 @@ struct mmu2dprivate {
 	/* Reference count. */
 	int refcount;
 
-	/* MMU enabled. */
-	int enabled;
-
 	/* Safe zone allocation. */
 	struct gcpage safezone;
 

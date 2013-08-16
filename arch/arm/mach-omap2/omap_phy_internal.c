@@ -251,10 +251,6 @@ int omap4_charger_detect(void)
 	}
 
 	omap4430_phy_power(NULL, 0, 0);
-	/* Power down the phy */
-	__raw_writel(PHY_PD, ctrl_base + CONTROL_DEV_CONF);
-	/* Disable the clocks */
-	omap4430_phy_set_clk(NULL, 0);
 
 	return charger;
 }
@@ -304,7 +300,7 @@ int omap4430_phy_suspend(struct device *dev, int suspend)
 #ifndef CONFIG_EMU_UART_DEBUG
 		if (__raw_readl(ctrl_base + CONTROL_DEV_CONF) & PHY_PD) {
 			__raw_writel(~PHY_PD, ctrl_base + CONTROL_DEV_CONF);
-			mdelay(200);
+			mdelay(300);
 		}
 #endif
 		/* restore the context */

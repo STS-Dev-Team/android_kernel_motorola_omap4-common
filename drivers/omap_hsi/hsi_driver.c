@@ -106,7 +106,6 @@ void hsi_save_ctx(struct hsi_dev *hsi_ctrl)
 		p->hst.arb_mode = hsi_inl(base, HSI_HST_ARBMODE_REG(port));
 
 		/* HSR */
-		p->hsr.mode = hsi_inl(base, HSI_HSR_MODE_REG(port));
 		if (!hsi_driver_device_is_hsi(pdev))
 			p->hsr.frame_size = hsi_inl(base,
 						HSI_HSR_FRAMESIZE_REG(port));

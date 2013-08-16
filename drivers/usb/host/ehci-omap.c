@@ -530,8 +530,8 @@ static int omap4_ehci_tll_hub_control(
 	u16		wValue,
 	u16		wIndex,
 	char		*buf,
-	u16		wLength
-) {
+	u16		wLength)
+{
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	u32 __iomem	*status_reg = &ehci->regs->port_status[
 				(wIndex & 0xff) - 1];
@@ -631,7 +631,6 @@ static int omap4_ehci_tll_hub_control(
 				temp_reg = __raw_readl(tll_reg);
 				temp_reg &= ~(1 << (wIndex + 8));
 
-
 				/* stop resume signaling */
 				temp = __raw_readl(status_reg) &
 					~(PORT_RWC_BITS | PORT_RESUME);
@@ -643,6 +642,7 @@ static int omap4_ehci_tll_hub_control(
 
 				/*Release other CPU*/
 				tll_WA_info.done = 1;
+
 				retval = handshake(ehci, status_reg,
 					   PORT_RESUME, 0, 2000 /* 2msec */);
 
@@ -955,6 +955,7 @@ static int ehci_hcd_omap_probe(struct platform_device *pdev)
 
 	hcd = usb_create_hcd(&ehci_omap_hc_driver, dev,
 			dev_name(dev));
+
 	if (!hcd) {
 		dev_err(dev, "failed to create hcd with err %d\n", ret);
 		ret = -ENOMEM;

@@ -29,6 +29,7 @@
 #include <linux/cpu.h>
 #include <linux/thermal_framework.h>
 #include <linux/platform_device.h>
+#include <linux/omap4_duty_cycle.h>
 
 #include <asm/system.h>
 #include <asm/smp_plat.h>
@@ -260,7 +261,7 @@ static inline void freq_table_free(void)
 		opp_free_cpufreq_table(mpu_dev, &freq_table);
 }
 
-#ifdef CONFIG_THERMAL_FRAMEWORK
+#if defined(CONFIG_THERMAL_FRAMEWORK) || defined(CONFIG_OMAP4_DUTY_CYCLE)
 void omap_thermal_step_freq_down(void)
 {
 	if (!omap_cpufreq_ready) {
@@ -332,6 +333,33 @@ static int cpufreq_apply_cooling(struct thermal_dev *dev,
 
 	return 0;
 }
+#endif
+
+#ifdef CONFIG_OMAP4_DUTY_CYCLE
+
+static struct duty_cycle_dev duty_dev = {
+	.cool_device = cpufreq_apply_cooling,
+};
+
+static int __init omap_duty_cooling_init(void)
+{
+	return duty_cooling_dev_register(&duty_dev);
+}
+
+static void __exit omap_duty_cooling_exit(void)
+{
+	duty_cooling_dev_unregister();
+}
+
+
+#else
+
+static int __init omap_duty_cooling_init(void) { return 0; };
+static void __exit omap_duty_cooling_exit(void);
+
+#endif
+
+#ifdef CONFIG_THERMAL_FRAMEWORK
 
 static struct thermal_dev_ops cpufreq_cooling_ops = {
 	.cool_device = cpufreq_apply_cooling,
@@ -409,7 +437,7 @@ static int __cpuinit omap_cpu_init(struct cpufreq_policy *policy)
 		cpumask_setall(policy->cpus);
 	}
 
-	omap_cpufreq_cooling_init();
+	omap_duty_cooling_init();
 	/* FIXME: what's the actual transition time? */
 	policy->cpuinfo.transition_latency = 300 * 1000;
 
@@ -515,6 +543,7 @@ static int __init omap_cpufreq_init(void)
 		if (t)
 			pr_warn("%s_init: platform_driver_register failed\n",
 				__func__);
+		ret = omap_cpufreq_cooling_init();
 	}
 
 	return ret;
@@ -523,6 +552,7 @@ static int __init omap_cpufreq_init(void)
 static void __exit omap_cpufreq_exit(void)
 {
 	omap_cpufreq_cooling_exit();
+	omap_duty_cooling_exit();
 	cpufreq_unregister_driver(&omap_driver);
 	platform_driver_unregister(&omap_cpufreq_platform_driver);
 	platform_device_unregister(&omap_cpufreq_device);

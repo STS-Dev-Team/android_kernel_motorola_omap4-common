@@ -35,6 +35,7 @@
 #include <linux/rpmsg.h>
 #include <linux/rpmsg_omx.h>
 #include <linux/completion.h>
+#include <linux/remoteproc.h>
 
 #include <mach/tiler.h>
 
@@ -105,33 +106,50 @@ static LIST_HEAD(rpmsg_omx_services_list);
 #endif
 #endif
 
-/*
- * TODO: Need to do this using lookup with rproc, but rproc is not
- * visible to rpmsg_omx
- */
-#define TILER_START	0x60000000
-#define TILER_END	0x80000000
 #ifdef CONFIG_VIDEO_OMAP_DCE
-#define ION_1D_START	0x82700000
-#define ION_1D_END	0x99700000
-#define ION_1D_VA	0x88000000
-#else
-#define ION_1D_START	0xBE900000
-#define ION_1D_END	0xBFD00000
-#define ION_1D_VA	0x88000000
+#define TILER_START  0x60000000
+#define TILER_END  0x80000000
+#define ION_1D_START  0x82700000
+#define ION_1D_END  0x99700000
+#define ION_1D_VA  0x88000000
 #endif
-static int _rpmsg_pa_to_da(u32 pa, u32 *da)
-{
-	int ret = 0;
 
-	if (pa >= TILER_START && pa < TILER_END)
+static int _rpmsg_pa_to_da(struct rpmsg_omx_instance *omx, u32 pa, u32 *da)
+{
+#ifdef CONFIG_VIDEO_OMAP_DCE
+	if (pa >= TILER_START && pa < TILER_END) {
 		*da = pa;
-	else if (pa >= ION_1D_START && pa < ION_1D_END)
+		return 0;
+	}
+	else if (pa >= ION_1D_START && pa < ION_1D_END) {
 		*da = (pa - ION_1D_START + ION_1D_VA);
+		return 0;
+	}
+	else {
+		*da = 0;
+		return -EINVAL;
+	}
+#else
+	int ret;
+	struct rproc *rproc;
+	u64 temp_da;
+
+	if (mutex_lock_interruptible(&omx->omxserv->lock))
+		return -EINTR;
+
+	rproc = rpmsg_get_rproc_handle(omx->omxserv->rpdev);
+
+	ret = rproc_pa_to_da(rproc, (phys_addr_t) pa, &temp_da);
+	if (ret)
+		pr_err("error with pa to da from rproc %d\n", ret);
 	else
-		ret = -EIO;
+		/* we know it is a 32 bit address */
+		*da = (u32)temp_da;
+
+	mutex_unlock(&omx->omxserv->lock);
 
 	return ret;
+#endif
 }
 
 static int _rpmsg_omx_buffer_lookup(struct rpmsg_omx_instance *omx,
@@ -151,64 +169,28 @@ static int _rpmsg_omx_buffer_lookup(struct rpmsg_omx_instance *omx,
 		/* is it an ion handle? */
 		handle = (struct ion_handle *)buffer;
 		if (!ion_phys(omx->ion_client, handle, &paddr, &unused)) {
-			ret = _rpmsg_pa_to_da((phys_addr_t)paddr, va);
+			ret = _rpmsg_pa_to_da(omx, (phys_addr_t)paddr, va);
 			goto exit;
 		}
 
 		/* how about an sgx buffer wrapping an ion handle? */
 		{
 			int fd;
-			struct ion_buffer *buffers[2] = { NULL, NULL };
-			int num_handles = 2;
-			ion_phys_addr_t paddr2;
-
-			fd = buffer;
-			if (!omap_ion_share_fd_to_buffers(fd, buffers,
-				&num_handles)) {
-				/* Get the 1st buffer's da */
-				if (buffers[0]) {
-					ret = ion_phys_frm_buffer(buffers[0],
-						&paddr, &unused);
-					if (ret)
-						goto exit;
-					ret = _rpmsg_pa_to_da(
-						(phys_addr_t)paddr, va);
-					if (ret)
-						goto exit;
-
-					/* Get the 2nd buffer's da in da2 */
-					if (buffers[1]) {
-						ret = ion_phys_frm_buffer(
-							buffers[1],
-							&paddr2, &unused);
-						if (ret)
-							goto exit;
-
-						ret = _rpmsg_pa_to_da(
-						(phys_addr_t)paddr2, va2);
-						goto exit;
-					} else
-						goto exit;
-				}
-			}
-		}
-
-#ifdef CONFIG_PVR_SGX
-		/* how about an sgx buffer wrapping an ion handle? */
-		{
-			int fd;
 			struct ion_handle *handles[2] = { NULL, NULL };
 			struct ion_client *pvr_ion_client;
 			ion_phys_addr_t paddr2;
+			int num_handles = 2;
 
 			fd = buffer;
-			PVRSRVExportFDToIONHandles(fd, &pvr_ion_client,
-					handles);
+			if (omap_ion_fd_to_handles(fd, &pvr_ion_client,
+					handles, &num_handles) < 0)
+				goto nopvr;
 
 			/* Get the 1st buffer's da */
 			if ((handles[0]) && !ion_phys(pvr_ion_client,
 					handles[0], &paddr, &unused)) {
-				ret = _rpmsg_pa_to_da((phys_addr_t)paddr, va);
+				ret = _rpmsg_pa_to_da(omx,
+						(phys_addr_t)paddr, va);
 				if (ret)
 					goto exit;
 
@@ -216,7 +198,7 @@ static int _rpmsg_omx_buffer_lookup(struct rpmsg_omx_instance *omx,
 				if ((handles[1]) &&
 					!ion_phys(pvr_ion_client,
 					handles[1], &paddr2, &unused)) {
-					ret = _rpmsg_pa_to_da(
+					ret = _rpmsg_pa_to_da(omx,
 						(phys_addr_t)paddr2, va2);
 					goto exit;
 				} else
@@ -224,11 +206,10 @@ static int _rpmsg_omx_buffer_lookup(struct rpmsg_omx_instance *omx,
 			}
 		}
 
-#endif
 	}
+nopvr:
 #endif
-
-	ret =  _rpmsg_pa_to_da((phys_addr_t)tiler_virt2phys(buffer), va);
+	ret =  _rpmsg_pa_to_da(omx, (phys_addr_t)tiler_virt2phys(buffer), va);
 exit:
 	if (ret)
 		pr_err("%s: buffer lookup failed %x\n", __func__, ret);
@@ -773,7 +754,7 @@ static int rpmsg_omx_probe(struct rpmsg_channel *rpdev)
 
 	omxserv->dev = device_create(rpmsg_omx_class, &rpdev->dev,
 			MKDEV(major, minor), NULL,
-			"rpmsg-omx%d", minor);
+			rpdev->id.name);
 	if (IS_ERR(omxserv->dev)) {
 		ret = PTR_ERR(omxserv->dev);
 		dev_err(&rpdev->dev, "device_create failed: %d\n", ret);
@@ -815,7 +796,7 @@ static void __devexit rpmsg_omx_remove(struct rpmsg_channel *rpdev)
 
 	mutex_lock(&omxserv->lock);
 	/*
-	 * If there is omx instrances that means it is a revovery.
+	 * If there are omx instances that means it is a recovery.
 	 * TODO: make sure it is a recovery.
 	 */
 	if (list_empty(&omxserv->list)) {
@@ -850,11 +831,11 @@ static void rpmsg_omx_driver_cb(struct rpmsg_channel *rpdev, void *data,
 
 static struct rpmsg_device_id rpmsg_omx_id_table[] = {
 #ifdef CONFIG_VIDEO_OMAP_DCE
+	{ .name = "rpmsg-omx" },
+#else
 	{ .name	= "rpmsg-omx0" }, /* ipu_c0 */
 	{ .name	= "rpmsg-omx1" }, /* ipu_c1 */
 	{ .name	= "rpmsg-omx2" }, /* dsp */
-#else
-	{ .name	= "rpmsg-omx" },
 #endif
 	{ },
 };
