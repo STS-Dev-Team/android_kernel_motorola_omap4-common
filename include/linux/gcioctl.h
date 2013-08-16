@@ -40,7 +40,7 @@ struct gccommit {
 };
 
 /* Command buffer header. */
-#define GC_BUFFER_SIZE 81920
+#define GC_BUFFER_SIZE (128 * 1024)
 struct gcbuffer {
 	struct gcfixup *fixuphead;	/* Address fixup list. */
 	struct gcfixup *fixuptail;
@@ -85,10 +85,19 @@ struct gcmap {
 	enum gcerror gcerror;		/* Return status code. */
 	unsigned int handle;		/* Mapped handle of the buffer. */
 
-	void *logical;			/* Pointer to the buffer. */
+	union {
+		void *logical;		/* Pointer to the buffer; used when
+					   pagearray is NULL. */
+		unsigned int offset;	/* Page offset of the buffer; used when
+					   pagearray is provided. */
+	} buf;
+
+	unsigned int pagesize;		/* Size of a physical page, 0 for
+					   default. */
+	unsigned long *pagearray;	/* Pointer to array of physical
+					   pages. */
+
 	unsigned int size;		/* Size of the buffer. */
-	unsigned long pagecount;
-	unsigned long *pagearray;
 };
 
 /*******************************************************************************

@@ -76,6 +76,7 @@ obj-$(CONFIG_VIB_GPIO)		+= vib-gpio.o
 obj-$(CONFIG_VIB_OMAP_PWM)	+= vib-omap-pwm.o
 obj-$(CONFIG_VIB_PWM)		+= vib-pwm.o
 obj-$(CONFIG_VIB_TIMED)		+= vib-timed.o
+obj-$(CONFIG_CDC_TCXO)		+= cdc_tcxo.o
 obj-$(CONFIG_GCCORE)		+= gcx/gccore/
 obj-$(CONFIG_GCBV)		+= gcx/gcbv/
 obj-$(CONFIG_GCIOCTL)		+= gcx/gcioctl/

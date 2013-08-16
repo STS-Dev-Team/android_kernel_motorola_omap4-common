@@ -1428,7 +1428,16 @@ static void twl6030_bci_battery_work(struct work_struct *work)
 	if (di->platform_data->battery_tmp_tbl == NULL)
 		return;
 
-	adc_code = req.rbuf[1];
+	adc_code = req.buf[1].code;
+
+	/*
+	 * TWL6032 has 12-bit ADC, TWL6030 has 10-bit ADC,
+	 * battery temperature table is calculated for the TWL6030.
+	 * So reject two lower bits for TWL6032.
+	 */
+	if (di->features & TWL6032_SUBCLASS)
+		adc_code >>= 2;
+
 	for (temp = 0; temp < di->platform_data->tblsize; temp++) {
 		if (adc_code >= di->platform_data->
 				battery_tmp_tbl[temp])
@@ -2367,11 +2376,9 @@ static int __devinit twl6030_bci_battery_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK_DEFERRABLE(&di->twl6030_bci_monitor_work,
 				twl6030_bci_battery_work);
-	schedule_delayed_work(&di->twl6030_bci_monitor_work, 0);
 
 	INIT_DELAYED_WORK_DEFERRABLE(&di->twl6030_current_avg_work,
 						twl6030_current_avg);
-	schedule_delayed_work(&di->twl6030_current_avg_work, 500);
 
 	ret = twl6030battery_voltage_setup(di);
 	if (ret)
@@ -2497,6 +2504,10 @@ static int __devinit twl6030_bci_battery_probe(struct platform_device *pdev)
 	ret = sysfs_create_group(&pdev->dev.kobj, &twl6030_bci_attr_group);
 	if (ret)
 		dev_dbg(&pdev->dev, "could not create sysfs files\n");
+
+	schedule_delayed_work(&di->twl6030_bci_monitor_work, 0);
+
+	schedule_delayed_work(&di->twl6030_current_avg_work, 0);
 
 	return 0;
 

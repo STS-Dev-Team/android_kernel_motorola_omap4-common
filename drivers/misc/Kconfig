@@ -678,6 +678,13 @@ config OMAP4_DUTY_CYCLE
 	If you are going to use OPP_NITRO with high level of leakage which.
 	could pontentially sustain a thermal runaway, say Y here.
 
+config CDC_TCXO
+	tristate "Texas Instruments CDC TCXO"
+	depends on I2C
+	default n
+	help
+	  Enable support for Texas Instruments CDC TCXO CDC3S04
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
