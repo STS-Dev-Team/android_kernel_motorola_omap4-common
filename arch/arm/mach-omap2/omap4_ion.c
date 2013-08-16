@@ -42,7 +42,7 @@ static size_t omap4_ion_heap_tiler_mem_size;
 static size_t omap4_ion_heap_nonsec_tiler_mem_size;
 
 static struct ion_platform_data omap4_ion_data = {
-	.nr = 3,
+	.nr = 4,
 	.heaps = {
 		{
 			.type = ION_HEAP_TYPE_CARVEOUT,
@@ -58,6 +58,11 @@ static struct ion_platform_data omap4_ion_data = {
 			.id = OMAP_ION_HEAP_NONSECURE_TILER,
 			.name = "nonsecure_tiler",
 		},
+		{
+			.type = ION_HEAP_TYPE_SYSTEM,
+			.id = OMAP_ION_HEAP_SYSTEM,
+			.name = "system",
+		}
 	},
 };
 

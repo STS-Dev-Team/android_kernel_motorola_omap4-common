@@ -36,6 +36,7 @@
 #include <plat/clock.h>
 #include <plat/dma.h>
 #include <plat/i2c.h>
+#include <plat/omap_hwmod.h>
 
 #define NAME_SIZE	50
 #define REGULATOR_MAX	1
@@ -213,6 +214,7 @@ static int rprm_auxclk_request(struct rprm_elem *e, struct rprm_auxclk *obj)
 	if (ret) {
 		pr_err("%s: rate not supported by %s\n", __func__,
 					clk_src_name[obj->parent_src_clk]);
+		ret = -EINVAL;
 		goto error_aux_src_parent;
 	}
 
@@ -234,7 +236,7 @@ static int rprm_auxclk_request(struct rprm_elem *e, struct rprm_auxclk *obj)
 	ret = clk_set_rate(acd->aux_clk, (obj->clk_rate * MHZ));
 	if (ret) {
 		pr_err("%s: rate not supported by %s\n", __func__, clk_name);
-		goto error_aux_enable;
+		goto error_aux_src_parent;
 	}
 
 	ret = clk_enable(acd->aux_clk);
@@ -440,16 +442,21 @@ static int rprm_i2c_request(struct rprm_elem *e, struct rprm_i2c *obj)
 {
 	struct device *i2c_dev;
 	struct i2c_adapter *adapter;
+	char i2c_name[NAME_SIZE];
 	int ret = -EINVAL;
+
+	sprintf(i2c_name, "i2c%d", obj->id);
+	i2c_dev = omap_hwmod_name_get_dev(i2c_name);
+	if (IS_ERR_OR_NULL(i2c_dev)) {
+		pr_err("%s: unable to lookup %s\n", __func__, i2c_name);
+		return ret;
+	}
 
 	adapter = i2c_get_adapter(obj->id);
 	if (!adapter) {
 		pr_err("%s: could not get i2c%d adapter\n", __func__, obj->id);
 		return -EINVAL;
 	}
-
-	i2c_dev = adapter->dev.parent;
-
 	i2c_detect_ext_master(adapter);
 	i2c_put_adapter(adapter);
 
@@ -557,7 +564,6 @@ int _set_constraints(struct rprm_elem *e, struct rprm_constraints_data *c)
 		_set_constraints_func = _rpres_set_constraints;
 		break;
 	case RPRM_IPU:
-	case RPRM_DSP:
 		_set_constraints_func = _rproc_set_constraints;
 		break;
 	default:
@@ -1184,7 +1190,7 @@ static struct rpmsg_device_id rprm_id_table[] = {
 	},
 	{ },
 };
-MODULE_DEVICE_TABLE(rpmsg, rprm_id_table);
+MODULE_DEVICE_TABLE(platform, rprm_id_table);
 
 static struct rpmsg_driver rprm_driver = {
 	.drv.name	= KBUILD_MODNAME,
