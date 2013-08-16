@@ -544,10 +544,7 @@ static int twl6030_get_gpadc_conversion(struct twl6030_bci_device_info *di,
 	int ret;
 
 	req.channels = (1 << channel_no);
-	if (di->features & TWL6032_SUBCLASS)
-		req.method = TWL6032_GPADC_SW2;
-	else
-		req.method = TWL6030_GPADC_SW2;
+	req.method = TWL6030_GPADC_SW2;
 	req.active = 0;
 	req.func_cb = NULL;
 	ret = twl6030_gpadc_conversion(&req);
@@ -612,6 +609,7 @@ static void twl6030_stop_usb_charger(struct twl6030_bci_device_info *di)
 static void twl6030_start_usb_charger(struct twl6030_bci_device_info *di)
 {
 	int ret;
+	u8 reg;
 
 	if ((di->features & TWL6032_SUBCLASS) &&
 			di->platform_data->use_hw_charger)
@@ -647,13 +645,17 @@ static void twl6030_start_usb_charger(struct twl6030_bci_device_info *di)
 
 enable:
 	if (di->charger_incurrentmA >= 50) {
-		ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER,
-				CONTROLLER_CTRL1_EN_CHARGER |
-				(di->features & TWL6032_SUBCLASS) ?
-				CONTROLLER_CTRL1_EN_LINCH : 0,
+		reg = CONTROLLER_CTRL1_EN_CHARGER;
+
+		if (di->platform_data->use_power_path)
+			reg |= CONTROLLER_CTRL1_EN_LINCH;
+
+		ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, reg,
 				CONTROLLER_CTRL1);
 		if (ret)
 			goto err;
+
+		di->charge_status = POWER_SUPPLY_STATUS_CHARGING;
 	}
 	return;
 err:
@@ -841,8 +843,6 @@ static irqreturn_t twl6030charger_ctrl_interrupt(int irq, void *_di)
 
 	if (!((di->features & TWL6032_SUBCLASS) &&
 			di->platform_data->use_hw_charger)) {
-		if (!(stat_reset & (VBUS_DET | VAC_DET)))
-			goto stat_fault;
 		if (stat_reset & VBUS_DET) {
 			/* On a USB detach, UNMASK VBUS OVP if masked*/
 			ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &temp,
@@ -931,8 +931,6 @@ static irqreturn_t twl6030charger_ctrl_interrupt(int irq, void *_di)
 		charger_fault = 1;
 		dev_dbg(di->dev, "Fault watchdog fired\n");
 	}
-
-stat_fault:
 	if (stat_reset & CONTROLLER_STAT1_FAULT_WDG)
 		dev_dbg(di->dev, "Fault watchdog recovered\n");
 	if (stat_set & CONTROLLER_STAT1_BAT_REMOVED)
@@ -1372,13 +1370,8 @@ static void twl6030_bci_battery_work(struct work_struct *work)
 	if (di->charge_status == POWER_SUPPLY_STATUS_CHARGING)
 		twl6030_set_watchdog(di, di->watchdog_duration);
 
-	if (di->features & TWL6032_SUBCLASS) {
-		req.channels = (1 << 1) | (1 << 18) | (1 << 8);
-		req.method = TWL6032_GPADC_SW2;
-	} else {
-		req.channels = (1 << 1) | (1 << 1) | (1 << 8);
-		req.method = TWL6030_GPADC_SW2;
-	}
+	req.method = TWL6030_GPADC_SW2;
+	req.channels = (1 << 1) | (1 << di->gpadc_vbat_chnl) | (1 << 8);
 
 	req.active = 0;
 	req.func_cb = NULL;
@@ -2244,7 +2237,7 @@ static int __devinit twl6030_bci_battery_probe(struct platform_device *pdev)
 	di->bk_bat.get_property = twl6030_bk_bci_battery_get_property;
 
 	di->vac_priority = 2;
-	di->capacity = 100;
+	di->capacity = -1;
 	di->capacity_debounce_count = 0;
 	di->ac_next_refresh = jiffies - 1;
 	platform_set_drvdata(pdev, di);
@@ -2344,9 +2337,6 @@ static int __devinit twl6030_bci_battery_probe(struct platform_device *pdev)
 
 	twl6030_set_watchdog(di, 32);
 
-	dev_info(&pdev->dev, "Battery Voltage at Bootup is %d mV\n",
-							di->voltage_mV);
-
 	INIT_WORK(&di->usb_work, twl6030_usb_charger_work);
 	di->nb.notifier_call = twl6030_usb_notifier_call;
 	di->otg = otg_get_transceiver();
@@ -2367,6 +2357,8 @@ static int __devinit twl6030_bci_battery_probe(struct platform_device *pdev)
 	}
 
 	di->voltage_mV = twl6030_get_gpadc_conversion(di, di->gpadc_vbat_chnl);
+	dev_info(&pdev->dev, "Battery Voltage at Bootup is %d mV\n",
+							di->voltage_mV);
 
 	ret = twl_i2c_read_u8(TWL6030_MODULE_ID0, &hw_state, STS_HW_CONDITIONS);
 	if (ret)

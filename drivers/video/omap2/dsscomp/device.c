@@ -355,7 +355,7 @@ static long query_display(struct dsscomp_dev *cdev,
 static long check_ovl(struct dsscomp_dev *cdev,
 					struct dsscomp_check_ovl_data *chk)
 {
-	/* for now return all overlays as possstruct dsscomp_dev *cdevible */
+	/* for now return all overlays as possible */
 	return (1 << cdev->num_ovls) - 1;
 }
 
@@ -586,6 +586,7 @@ static int dsscomp_probe(struct platform_device *pdev)
 
 	ret = misc_register(&cdev->dev);
 	if (ret) {
+		kfree(cdev);
 		pr_err("dsscomp: failed to register misc device.\n");
 		return ret;
 	}

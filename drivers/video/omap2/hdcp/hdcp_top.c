@@ -324,9 +324,7 @@ static void hdcp_work_queue(struct work_struct *work)
 
 	mutex_lock(&hdcp.lock);
 
-#ifdef CONFIG_PANEL_MAPPHONE_OMAP4_HDTV
 	hdcp_request_dss();
-#endif
 
 	DBG("hdcp_work_queue() - START - %u hdmi=%d hdcp=%d auth=%d evt= %x %d"
 	    " hdcp_ctrl=%02x",
@@ -453,10 +451,7 @@ static void hdcp_work_queue(struct work_struct *work)
 		(event & 0xFF00) >> 8,
 		event & 0xFF);
 
-#ifdef CONFIG_PANEL_MAPPHONE_OMAP4_HDTV
 	hdcp_release_dss();
-#endif
-
 	mutex_unlock(&hdcp.lock);
 }
 

@@ -486,8 +486,9 @@ static int hdmi_power_on(struct omap_dss_device *dssdev)
 		goto err;
 	}
 
-	r = hdmi_ti_4xxx_phy_init(&hdmi.hdmi_data,
-						dssdev->phy.hdmi.ds_percent);
+//	r = hdmi_ti_4xxx_phy_init(&hdmi.hdmi_data,
+//						dssdev->phy.hdmi.ds_percent);
+	r = hdmi_ti_4xxx_phy_init(&hdmi.hdmi_data);
 	if (r) {
 		HDTVDBG("Failed to start PHY\n");
 		goto err;
@@ -577,8 +578,9 @@ static int hdmi_power_edid_only(struct omap_dss_device *dssdev)
 		goto err;
 	}
 
-	r = hdmi_ti_4xxx_phy_init(&hdmi.hdmi_data,
-						dssdev->phy.hdmi.ds_percent);
+//	r = hdmi_ti_4xxx_phy_init(&hdmi.hdmi_data,
+//						dssdev->phy.hdmi.ds_percent);
+	r = hdmi_ti_4xxx_phy_init(&hdmi.hdmi_data);
 	if (r) {
 		HDTVDBG("Failed to start PHY\n");
 		goto err;

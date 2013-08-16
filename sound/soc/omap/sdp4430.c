@@ -244,6 +244,21 @@ static struct snd_soc_ops sdp4430_mcbsp_ops = {
 	.hw_params = sdp4430_mcbsp_hw_params,
 };
 
+static int sdp4430_dmic_startup(struct snd_pcm_substream *substream)
+{
+	struct twl6040 *twl6040 = twl6040_codec->control_data;
+	/* In order for the DMIC's to use the PAD CLOCKS, the twl6040
+	 * must be powered up, since it supplies the clock source.
+	 */
+	return twl6040_enable(twl6040);
+}
+
+static void sdp4430_dmic_shutdown(struct snd_pcm_substream *substream)
+{
+	struct twl6040 *twl6040 = twl6040_codec->control_data;
+	twl6040_disable(twl6040);
+}
+
 static int sdp4430_dmic_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params)
 {
@@ -266,6 +281,8 @@ static int sdp4430_dmic_hw_params(struct snd_pcm_substream *substream,
 }
 
 static struct snd_soc_ops sdp4430_dmic_ops = {
+	.startup = sdp4430_dmic_startup,
+	.shutdown = sdp4430_dmic_shutdown,
 	.hw_params = sdp4430_dmic_hw_params,
 };
 
@@ -432,21 +449,6 @@ static int sdp4430_set_pdm_dl1_gains(struct snd_soc_dapm_context *dapm)
 	}
 
 	return omap_abe_set_dl1_output(output);
-}
-
-static int sdp4430_dmic_twl6040_pre(struct snd_pcm_substream *substream)
-{
-	struct twl6040 *twl6040 = twl6040_codec->control_data;
-	/* In order for the DMIC's to use the PAD CLOCKS, the twl6040
-	 * must be powered up, since it supplies the clock source.
-	 */
-	return twl6040_enable(twl6040);
-}
-
-static void sdp4430_dmic_twl6040_post(struct snd_pcm_substream *substream)
-{
-	struct twl6040 *twl6040 = twl6040_codec->control_data;
-	twl6040_disable(twl6040);
 }
 
 static int sdp4430_twl6040_init(struct snd_soc_pcm_runtime *rtd)
@@ -1030,6 +1032,22 @@ static struct snd_soc_dai_link sdp4430_dai[] = {
 		.no_pcm = 1, /* don't create ALSA pcm for this */
 		.be_hw_params_fixup = dmic_be_hw_params_fixup,
 		.be_id = OMAP_ABE_DAI_DMIC2,
+	},
+	{
+		.name = OMAP_ABE_BE_VXREC,
+		.stream_name = "VXREC Capture",
+
+		/* ABE components - VxREC */
+		.cpu_dai_name = "omap-abe-vxrec-dai",
+		.platform_name = "aess",
+
+		/* no codec needed */
+		.codec_dai_name = "null-codec-dai",
+
+		.no_pcm = 1, /* don't create ALSA pcm for this */
+		.no_codec = 1,
+		.be_id = OMAP_ABE_DAI_VXREC,
+		.ignore_suspend = 1,
 	},
 };
 

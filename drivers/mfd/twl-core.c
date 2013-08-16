@@ -39,6 +39,7 @@
 
 #include <linux/i2c.h>
 #include <linux/i2c/twl.h>
+#include "twl-core.h"
 
 #if defined(CONFIG_ARCH_OMAP2) || defined(CONFIG_ARCH_OMAP3)
 #include <plat/cpu.h>
@@ -794,28 +795,23 @@ add_children(struct twl4030_platform_data *pdata, unsigned long features)
 
 		static struct regulator_consumer_supply usb3v3;
 		int regulator;
-
 		if (twl_has_regulator()) {
-			/* this is a template that gets copied */
-			struct regulator_init_data usb_fixed = {
-				.constraints.valid_modes_mask =
-					REGULATOR_MODE_NORMAL
-					| REGULATOR_MODE_STANDBY,
-				.constraints.valid_ops_mask =
-					REGULATOR_CHANGE_MODE
-					| REGULATOR_CHANGE_STATUS,
-			};
-
 			if (features & TWL6032_SUBCLASS) {
 				usb3v3.supply =	"ldousb";
 				regulator = TWL6032_REG_LDOUSB;
+				child = add_regulator_linked(regulator,
+							     pdata->ldousb,
+							     &usb3v3, 1,
+							     features);
 			} else {
 				usb3v3.supply = "vusb";
 				regulator = TWL6030_REG_VUSB;
+				child = add_regulator_linked(regulator,
+							     pdata->vusb,
+							     &usb3v3, 1,
+							     features);
 			}
-			child = add_regulator_linked(regulator, &usb_fixed,
-							&usb3v3, 1,
-							features);
+
 			if (IS_ERR(child))
 				return PTR_ERR(child);
 		}
@@ -1059,6 +1055,16 @@ add_children(struct twl4030_platform_data *pdata, unsigned long features)
 				pdata->clk32kaudio, features);
 		if (IS_ERR(child))
 			return PTR_ERR(child);
+
+		child = add_regulator(TWL6030_REG_SYSEN,
+				pdata->sysen, features);
+		if (IS_ERR(child))
+			return PTR_ERR(child);
+
+		child = add_regulator(TWL6030_REG_REGEN1,
+				pdata->sysen, features);
+		if (IS_ERR(child))
+			return PTR_ERR(child);
 	}
 
 	/* twl6032 regulators */
@@ -1227,12 +1233,6 @@ static void clocks_init(struct device *dev,
 
 /*----------------------------------------------------------------------*/
 
-int twl4030_init_irq(int irq_num, unsigned irq_base, unsigned irq_end);
-int twl4030_exit_irq(void);
-int twl4030_init_chip_irq(const char *chip);
-int twl6030_init_irq(int irq_num, unsigned irq_base, unsigned irq_end);
-int twl6030_exit_irq(void);
-
 #ifdef CONFIG_PM
 static int twl_suspend(struct i2c_client *client, pm_message_t mesg)
 {
@@ -1334,12 +1334,19 @@ twl_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		WARN(ret < 0, "Error: reading twl_idcode register value\n");
 	}
 
+	features = id->driver_data;
+	if (twl_class_is_6030()) {
+		twl_i2c_read_u8(TWL_MODULE_USB, &temp, USB_PRODUCT_ID_LSB);
+		if (temp == 0x32)
+			features |= TWL6032_SUBCLASS;
+	}
+
 	/* load power event scripts */
 	if (twl_has_power()) {
 		if (twl_class_is_4030() && pdata->power)
 			twl4030_power_init(pdata->power);
 		if (twl_class_is_6030())
-			twl6030_power_init(pdata->power);
+			twl6030_power_init(pdata->power, features);
 	}
 
 	/* Maybe init the T2 Interrupt subsystem */
@@ -1352,7 +1359,7 @@ twl_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			pdata->irq_end);
 		} else {
 			status = twl6030_init_irq(client->irq, pdata->irq_base,
-			pdata->irq_end);
+			pdata->irq_end, features);
 		}
 
 		if (status < 0)
@@ -1369,14 +1376,6 @@ twl_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		temp &= ~(SR_I2C_SDA_CTRL_PU | SR_I2C_SCL_CTRL_PU | \
 		I2C_SDA_CTRL_PU | I2C_SCL_CTRL_PU);
 		twl_i2c_write_u8(TWL4030_MODULE_INTBR, temp, REG_GPPUPDCTR1);
-	}
-
-
-	features = id->driver_data;
-	if (twl_class_is_6030()) {
-		twl_i2c_read_u8(TWL_MODULE_USB, &temp, USB_PRODUCT_ID_LSB);
-		if (temp == 0x32)
-			features |= TWL6032_SUBCLASS;
 	}
 
 	status = add_children(pdata, features);
